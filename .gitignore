@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# 산림청 originals and downloads: local only, re-downloadable (see data/README.md)
+FRT000801/
+mountain/
+data/raw/
+
+# Regenerated locally by scripts/build_trails.py
+data/*.geojson
+
+# Superseded pipeline, kept locally as a lookup pool
+data/archive/
+scripts/archive/
+
+__pycache__/
+*.log
