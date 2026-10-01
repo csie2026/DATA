@@ -4,6 +4,7 @@
 데이터 생성·수정은 DB 담당이 맡고, 이 문서는 **사용하는 쪽** 기준입니다.
 
 - 이 저장소(DATA): 데이터 원본 CSV와 생성 스크립트. 데이터셋 자체 설명은 [`data/README_ko.md`](data/README_ko.md)
+- 사용한 외부 API(기상청, 산림청, OpenStreetMap, Open-Meteo)의 명세와 호출 한도·라이선스: [`API.md`](API.md)
 - BE 저장소: 실제로 DB에 들어가는 Flyway 마이그레이션(`src/main/resources/db/migration/V2__mountains.sql`, `V3__courses.sql`)과 날씨 API(`com.ggmount.weather`)
 
 ## 1. 구조
