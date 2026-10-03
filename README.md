@@ -9,6 +9,7 @@ ToPeak(경기도 등산 앱)의 산·등산 코스 데이터를 만들고 관리
 ```
 data/      산·등산로·코스 데이터(CSV)와 데이터셋 설명
 scripts/   데이터 생성·검사 스크립트, BE 마이그레이션 SQL 생성
+API.md     데이터 수집과 날씨에 사용한 외부 API 명세
 ```
 
 | 파일 | 내용 |
@@ -92,6 +93,7 @@ SELECT m.name FROM mountains m LEFT JOIN courses c ON c.mountain_id = m.id WHERE
 ## 관련 문서
 
 - 데이터셋 상세: [`data/README_ko.md`](data/README_ko.md)
+- 사용한 외부 API: [`API.md`](API.md)
 - 앱 전체 API 명세: DOCS 저장소 [`ToPeak_API명세서.md`](https://github.com/csie2026/DOCS/blob/main/ToPeak_API%EB%AA%85%EC%84%B8%EC%84%9C.md)
 
 ## 출처
