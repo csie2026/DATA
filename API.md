@@ -1,7 +1,7 @@
 # 사용한 외부 API 명세
 
 산·코스 데이터 구축과 날씨 기능에 사용한 외부 API의 호출 방법, 사용 범위(호출 한도·라이선스), 우리 프로젝트의 사용량을 정리한 문서입니다.
-우리 BE가 제공하는 API(`GET /api/mountains/{id}/weather`)는 [README 4장](README.md#4-api)을 참고하세요.
+우리 BE가 제공하는 API(`GET /api/mountains/{id}/weather` 등)는 DOCS 저장소의 [`ToPeak_API명세서.md`](https://github.com/csie2026/DOCS/blob/main/ToPeak_API%EB%AA%85%EC%84%B8%EC%84%9C.md)를 참고하세요.
 
 ## 한눈에 보기
 
