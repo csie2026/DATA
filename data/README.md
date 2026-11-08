@@ -31,13 +31,13 @@ Names keep their parentheses, e.g. `검단산 (성남/광주)`: the parentheses 
 |---|---|
 | `check_data.py` | Cross-file checks across all CSVs and GeoJSONs: ids and foreign keys, value ranges, description rules, the difficulty rule, and whether each course line runs from its trailhead to the summit. It must print 0 issues. |
 | `check_selected.py` | Sanity checks for `mountains.csv`. The remaining flags have been reviewed and accepted (border mountains, hills under 100 m, rows with no code, and so on). |
-| `build_seed_sql.py <BE migration dir>` | Writes the BE Flyway files `V2__mountains.sql` (from the two CSVs) and `V3__courses.sql` (from `courses.geojson`; paths simplified to 2 m, difficulty as EASY/NORMAL/HARD). It adds the region and the KMA weather grid, and moves the Seoul border mountains and 수리산 under their Gyeonggi city. |
+| `build_seed_sql.py <empty review output dir>` | Creates review-only V2/V3 candidates in an empty directory. Existing migration directories are rejected. Course IDs follow `seed_identity.json`. Region/city mapping and path simplification remain unchanged. |
 | `build_trails.py` | Builds `trails.*` and `courses.*` (`trails.id` = plain integers 1..N, renumbered on every rebuild; courses have no id (the DB assigns it); `mountain_id` → `mountains.id`; `courses.segment_ids` → `trails.id`; `trails.source` = forest/osm, `source_id` = 산림청 `MNTN_CODE-PMNTN_SN` (not unique) or OSM `way/<id>`; `courses.source` = forest/osm). Needs `../FRT000801` and `../mountain`. |
 | `geo.py` | Shared paths and TM projections (EPSG 5179/5186); `python geo.py` runs the self-check. |
 | `fetch_forest_api.py` | Re-downloads `raw/forest_api.json`. Needs `DATA_GO_KR_KEY` in `../.env`. |
 | `archive/` | Old pipeline scripts (`build_mountains.py`, `build_selected.py`, `suggest_summits.py`). **Do not run them.** `build_selected.py` would overwrite the hand edits in `mountains.csv`, and the input paths have moved to `data/archive/`. |
 
-After editing a CSV, run `check_data.py` and `check_selected.py`, then `build_seed_sql.py ../BE/src/main/resources/db/migration`.
+For the shared snapshot without GeoJSON, run `python -B scripts/check_data.py --csv-only`, `python -B scripts/check_seed.py`, and `python -B -m unittest discover -s tests -v` from DATA. The CSV-only check does not validate original geometry. Full checks return exit code 2 for missing GeoJSON or external validation inputs. Follow [the reproduction procedure](../docs/reproducibility.md) before generating candidates. Never regenerate into existing Flyway migrations.
 
 ## Courses (provisional)
 
@@ -48,7 +48,7 @@ After editing a CSV, run `check_data.py` and `check_selected.py`, then `build_se
   - 어려움: climb ≥ 600 m or length ≥ 8 km
   - 쉬움: climb < 200 m and length < 3 km
   - 보통: everything else
-- The thresholds are still being tuned.
+- Phase 21 preserves the thresholds and the missing-elevation branch: length below 3 km is easy, 8 km or more is hard, otherwise normal when climb is missing.
 - At most 5 courses per mountain. Their starts must be at least 45° apart as seen from the summit; within one direction the shortest course is kept.
 - Courses with an average grade over 35% are dropped (a DEM error, or not a walking route).
 - OSM courses fill in only the mountains with no 산림청 course.

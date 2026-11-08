@@ -8,12 +8,13 @@ Outputs:
 difficulty is recomputed from length and net climb. Trailhead elevation: Open-Meteo elevation API
 (Copernicus DEM 90 m, attribution required), cached in data/raw/elevation_cache.json.
 """
-import csv, heapq, json, math, os, re, sys, time, urllib.request, zipfile, collections
-import shapefile
+import argparse, csv, heapq, json, math, os, platform, re, sys, time, urllib.request, zipfile, collections
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from geo import P, to_wgs_5179, to_5179_from_wgs, to_5179_from_5186
 import osm_trails
+from data_contract import load_identity, validate_scope, require_empty_output, digest, validate_features
 
 # Extra trail codes for a table row whose own code has no trails (same mountain, other side of a border).
 EXTRA_CODES = {'412900201': ['116500401']}  # 우면산: trails are under the Seoul code
@@ -43,9 +44,11 @@ def difficulty(km, climb):
 def elevations(points):
     """{(lat, lon): elevation m} via Open-Meteo, 100 points per request, cached on disk."""
     path = P('data', 'raw', 'elevation_cache.json')
-    cache = json.load(open(path, encoding='utf-8')) if os.path.exists(path) else {}
+    cache = json.loads(Path(path).read_text(encoding='utf-8')) if os.path.exists(path) else {}
     key = lambda p: f'{p[0]:.5f},{p[1]:.5f}'
     todo = sorted({key(p) for p in points} - cache.keys())
+    if todo and not osm_trails.ALLOW_NETWORK:
+        raise ValueError(f'고도 캐시에 {len(todo)}개 좌표가 없습니다. 기준 캐시를 확보하세요. 새 수집은 --allow-network가 필요합니다.')
     for i in range(0, len(todo), 100):
         chunk = todo[i:i + 100]
         url = ('https://api.open-meteo.com/v1/elevation?latitude=' + ','.join(k.split(',')[0] for k in chunk)
@@ -53,17 +56,22 @@ def elevations(points):
         for attempt in range(6):  # Open-Meteo counts each point; 429 = wait for the minute window
             try:
                 vals = json.load(urllib.request.urlopen(url, timeout=60))['elevation']
+                if len(vals) != len(chunk) or any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)) for v in vals):
+                    raise ValueError('고도 API 응답 개수 또는 값이 올바르지 않습니다.')
                 break
             except urllib.error.HTTPError as e:
                 if e.code != 429 or attempt == 5:
                     raise
                 print(f'  elevation 429, waiting 65 s ({i}/{len(todo)})', flush=True)
                 time.sleep(65)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         cache.update(zip(chunk, vals))
         json.dump(cache, open(path, 'w', encoding='utf-8'))  # keep progress if a later chunk fails
         time.sleep(5)
-    json.dump(cache, open(path, 'w', encoding='utf-8'))
-    return {p: cache[key(p)] for p in points}
+    result = {p: cache[key(p)] for p in points}
+    if any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)) for v in result.values()):
+        raise ValueError('고도 캐시에 잘못된 값이 있습니다.')
+    return result
 
 
 def spot_trailheads(codes):
@@ -72,7 +80,7 @@ def spot_trailheads(codes):
     for code in codes:
         zf = P('mountain', 'mountain', f'{code}_geojson.zip')
         if not os.path.exists(zf):
-            continue
+            raise FileNotFoundError(f'시종점 입력 ZIP이 없습니다: {zf}')
         z = zipfile.ZipFile(zf)
         for n in z.namelist():
             if 'PMNTN_SPOT' in n and 'SAFE' not in n and n.endswith('.json'):
@@ -85,13 +93,30 @@ def spot_trailheads(codes):
     return out
 
 
-def main():
+def main(output_dir, allow_network=False):
+    out = require_empty_output(output_dir, [P('data'), P('..', 'BE', 'src', 'main', 'resources', 'db', 'migration')])
+    if out == Path(P()).resolve() or Path(P()).resolve() in out.parents:
+        raise ValueError('DATA 저장소 바깥의 별도 빈 출력 폴더를 사용하세요.')
+    try:
+        import shapefile
+    except ImportError as exc:
+        raise ValueError('pyshp가 필요합니다. python -m pip install -r requirements.txt 를 실행하세요.') from exc
+    osm_trails.ALLOW_NETWORK = allow_network
     table = list(csv.DictReader(open(P('data', 'mountains.csv'), encoding='utf-8-sig')))
+    identity = load_identity()
+    from data_contract import read_csv
+    validate_scope(table, read_csv(P('data', 'courses.csv')), identity)
     owner = {}
     for m in table:
         for c in [c for c in m['codes'].split(';') if c] + EXTRA_CODES.get(m['code'], []):
             owner[c] = m
 
+    inputs = [Path(P('data', 'mountains.csv')), Path(P('data', 'seed_identity.json'))]
+    for suffix in ('.shp', '.shx', '.dbf', '.prj'):
+        path = Path(P('FRT000801', 'TB_FGDI_WG_MT_WAY_ALL' + suffix))
+        if not path.is_file():
+            raise FileNotFoundError(f'산림청 입력 파일이 없습니다: {path}')
+        inputs.append(path)
     segs, seen = collections.defaultdict(list), set()
     for sr in shapefile.Reader(P('FRT000801', 'TB_FGDI_WG_MT_WAY_ALL.shp'), encoding='cp949').iterShapeRecords():
         a = sr.record.as_dict()
@@ -152,7 +177,9 @@ def main():
                     heapq.heappush(heap, (d2, n2))
 
         heads = {}
-        for p, label in spot_trailheads([c for c in m['codes'].split(';') if c] + EXTRA_CODES.get(m['code'], [])):
+        codes = [c for c in m['codes'].split(';') if c] + EXTRA_CODES.get(m['code'], [])
+        inputs += [Path(P('mountain', 'mountain', f'{code}_geojson.zip')) for code in codes]
+        for p, label in spot_trailheads(codes):
             n = nearest(p)
             if math.dist(xy[n], p) <= TRAILHEAD_SNAP_M and n in dist:
                 heads.setdefault(n, label or heads.get(n, ''))
@@ -197,6 +224,7 @@ def main():
         if m['id'] in done:
             continue
         ts, cs, problem = osm_trails.build(m, len(seen) + 1 + osm_n, SUMMIT_GAP_M, MIN_COURSE_KM)
+        inputs.append(Path(P('data', 'raw', 'osm_paths', f"{m['id']}.json")))
         trails += ts; courses += cs; osm_n += len(ts)
         no_course.append(f"{m['name']}: " + (f'OSM {problem}' if problem else f'OSM {len(cs)} candidate courses'))
 
@@ -240,18 +268,37 @@ def main():
     cf = ['mountain_id', 'mountain_name', 'source', 'name', 'start_name', 'start_lat', 'start_lon', 'start_elev_m',
           'climb_m', 'length_km', 'up_min', 'down_min', 'difficulty', 'risk', 'segment_ids']
     courses = [c for cs in by_m.values() for c in cs]
+    validate_scope(table, courses, identity)
+    trail_ids = [str(t['id']) for t in trails]
+    if len(set(trail_ids)) != len(trail_ids) or set(trail_ids) != {str(i) for i in range(1, len(trails) + 1)}:
+        raise ValueError('구간 ID가 연속적이고 유일한 집합이 아닙니다.')
     # Trail ids are plain integers set when read (source_id is not unique: one 산림청 key can have several
     # geometries); split summit segments keep their parent's id. Courses get no id: the DB assigns it on import.
     # ponytail: trail ids are renumbered on every rebuild, freeze them once the app references trails
     trails.sort(key=lambda s: s['id'])
+    generated = []
     for name, rows, fields in (('trails', trails, tf), ('courses', courses, cf)):
-        with open(P('data', name + '.csv'), 'w', newline='', encoding='utf-8-sig') as f:
-            w = csv.DictWriter(f, fields, extrasaction='ignore')
-            w.writeheader(); w.writerows(rows)
+        clean = [{k: str(r[k]) for k in fields} for r in rows]
         fc = {'type': 'FeatureCollection', 'features': [
             {'type': 'Feature', 'properties': {k: r[k] for k in fields},
              'geometry': {'type': 'LineString', 'coordinates': wgs(r['pts'])}} for r in rows]}
-        json.dump(fc, open(P('data', name + '.geojson'), 'w', encoding='utf-8'), ensure_ascii=False)
+        validate_features(fc['features'], clean, {m['id']: m for m in table}, name)
+        generated.append((name, rows, fields, fc))
+    out.mkdir(parents=True, exist_ok=True)
+    for name, rows, fields, fc in generated:
+        with (out / (name + '.csv')).open('x', newline='', encoding='utf-8-sig') as f:
+            w = csv.DictWriter(f, fields, extrasaction='ignore')
+            w.writeheader(); w.writerows(rows)
+        with (out / (name + '.geojson')).open('x', encoding='utf-8') as f:
+            json.dump(fc, f, ensure_ascii=False)
+    inputs.append(Path(P('data', 'raw', 'elevation_cache.json')))
+    provenance = {'python': platform.python_version(), 'pyshp': shapefile.__version__,
+                  'network_allowed': allow_network,
+                  'inputs_sha256': {str(p.relative_to(P())): digest(p) for p in sorted(set(inputs))},
+                  'scripts_sha256': {p.name: digest(p) for p in sorted(Path(P('scripts')).glob('*.py'))},
+                  'outputs_sha256': {p.name: digest(p) for p in sorted(out.iterdir())}}
+    with (out / 'provenance.json').open('x', encoding='utf-8') as f:
+        json.dump(provenance, f, ensure_ascii=False, indent=2)
 
     print(f'trails {len(trails)} segments on {len({t["mountain_id"] for t in trails})} mountains; courses {len(courses)} on {len(by_m)} mountains; '
           f'difficulty {dict(collections.Counter(c["difficulty"] for c in courses))}')
@@ -259,4 +306,12 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='기준 ID를 보존하며 별도 빈 폴더에 코스 후보를 생성합니다.')
+    parser.add_argument('output_dir', type=Path)
+    parser.add_argument('--allow-network', action='store_true', help='없는 OSM·고도 캐시의 새 수집 허용 (기존 결과 재현을 보장하지 않음)')
+    args = parser.parse_args()
+    try:
+        main(args.output_dir, args.allow_network)
+    except (OSError, ValueError, KeyError, TypeError, IndexError, RuntimeError) as exc:
+        print(f'생성 중단: {exc}', file=sys.stderr)
+        sys.exit(1)

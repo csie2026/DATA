@@ -28,6 +28,13 @@ def province_of(lat, lon, provinces):
 
 
 def main():
+    required = [P('data', 'raw', name) for name in ('provinces_geo.json', 'osm_peaks.json')]
+    missing = [path for path in required if not os.path.isfile(path)]
+    if missing:
+        print('산별 외부자료 검증 미완료: 필요한 기준 입력이 없습니다. README의 보관·확보 절차를 확인하세요.')
+        for path in missing:
+            print(path)
+        sys.exit(2)
     rows = list(csv.DictReader(open(P('data', 'mountains.csv'), encoding='utf-8-sig')))
     names = [l.strip() for l in open(P('data', 'mountain_names.txt'), encoding='utf-8') if l.strip()]
     provinces = {}
@@ -108,4 +115,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
+        print(f'산별 검증 실패: 입력 파일의 형식을 확인하세요 ({exc})', file=sys.stderr)
+        sys.exit(1)
