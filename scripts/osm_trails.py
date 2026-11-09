@@ -9,6 +9,7 @@ import collections, heapq, json, math, os, re, time, urllib.parse, urllib.reques
 from geo import P, to_5179_from_wgs, to_wgs_5179
 
 URLS = ['https://overpass-api.de/api/interpreter']  # mirrors tried (kumi, private.coffee) time out from here
+ALLOW_NETWORK = False
 PATHS = 'path|footway|steps|track|bridleway'
 ROADS = 'motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road'
 PLACES = 'town|village|hamlet|suburb|quarter|neighbourhood'
@@ -40,6 +41,8 @@ def fetch(m):
     path = P('data', 'raw', 'osm_paths', f"{m['id']}.json")
     if os.path.exists(path):
         return json.load(open(path, encoding='utf-8'))
+    if not ALLOW_NETWORK:
+        raise FileNotFoundError(f'기준 OSM 캐시가 없습니다: {path}. 새 수집은 --allow-network가 필요합니다.')
     lat, lon = m['summit_lat'], m['summit_lon']
     query = lambda r: f"""[out:json][timeout:180];
 way(around:{r},{lat},{lon})[highway~"^({PATHS})$"]->.p;
@@ -59,7 +62,7 @@ node(around:{r + PLACE_M},{lat},{lon})[place~"^({PLACES})$"]->.n;
             print(f"  overpass retry {attempt + 1} for {m['name']} ({url.split('/')[2]}): {e}", flush=True)
             time.sleep(20 * (attempt + 1))
     if data is None:
-        return None  # not cached: the next run tries again
+        raise RuntimeError(f'OSM 수집에 실패했습니다 (산 ID {m["id"]}). 불완전한 결과를 저장하지 않습니다.')
     os.makedirs(os.path.dirname(path), exist_ok=True)
     json.dump(data, open(path, 'w', encoding='utf-8'), ensure_ascii=False)
     time.sleep(2)
@@ -69,8 +72,6 @@ node(around:{r + PLACE_M},{lat},{lon})[place~"^({PLACES})$"]->.n;
 def build(m, next_id, summit_gap_m, min_course_km):
     """-> (trails, courses, problem). Dict layout matches build_trails.py; pts are EPSG 5179."""
     data = fetch(m)
-    if data is None:
-        return [], [], 'Overpass fetch failed (rerun to retry)'
     els = data['elements']
     paths = [e for e in els if e['type'] == 'way' and re.fullmatch(PATHS, e['tags'].get('highway', '')) and is_trail(e['tags'])]
     roads = [e for e in els if e['type'] == 'way' and re.fullmatch(ROADS, e['tags'].get('highway', ''))]

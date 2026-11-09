@@ -60,21 +60,23 @@
 |---|---|
 | `check_data.py` | CSV와 GeoJSON 전체를 서로 대조해서 검사합니다. id와 참조 관계, 값 범위, 설명 규칙, 난이도 기준, 코스 선이 출발점에서 정상까지 이어지는지를 봅니다. **결과가 0 issues여야 합니다.** |
 | `check_selected.py` | `mountains.csv`의 산별 검사입니다(OSM 정상, 도 경계, 높이 등). 남아 있는 경고는 모두 확인하고 넘어간 항목입니다(경계에 걸친 산, 100m 미만 산, 코드 없는 산 등). |
-| `build_seed_sql.py <BE 마이그레이션 폴더>` | BE Flyway 파일 `V2__mountains.sql`(CSV 두 개)과 `V3__courses.sql`(`courses.geojson`, 경로는 2m 기준으로 단순화, 난이도는 EASY/NORMAL/HARD)을 만듭니다. 권역과 기상청 격자 좌표를 넣고, 서울 경계에 있는 산과 수리산은 인접한 경기 시·군으로 지정합니다. |
-| `build_trails.py` | `trails.*`와 `courses.*`를 만듭니다. `../FRT000801`과 `../mountain` 폴더가 필요합니다. |
+| `build_seed_sql.py <별도 빈 출력 폴더>` | 산 CSV와 `courses.geojson`을 검토용 V2·V3 SQL로 변환합니다. 기존 migration 폴더 출력은 금지하며 코스 ID는 `seed_identity.json`을 따릅니다. 권역·시군·높이 반올림·기상청 격자·경로 2m 단순화는 유지합니다. |
+| `build_trails.py <별도 빈 출력 폴더>` | `trails.*`와 `courses.*` 후보를 생성합니다. `FRT000801`, `mountain/mountain`, OSM·고도 캐시가 필요합니다. 기본은 오프라인이며 기존 DATA를 덮어쓰지 않습니다. |
 | `geo.py` | 공용 경로와 좌표 변환(EPSG 5179/5186). `python geo.py`를 실행하면 자체 검사를 합니다. |
 | `fetch_forest_api.py` | `raw/forest_api.json`을 다시 내려받습니다. `../.env`에 `DATA_GO_KR_KEY`가 있어야 합니다. |
 | `archive/` | 예전 파이프라인 스크립트(`build_mountains.py`, `build_selected.py`, `suggest_summits.py`). **실행 금지.** `build_selected.py`를 실행하면 엑셀로 고친 `mountains.csv`를 덮어씁니다. 입력 파일도 `data/archive/`로 옮겨져 있어서 그대로는 동작하지 않습니다. |
 
-CSV를 고친 다음에는 아래 순서로 실행합니다.
+원본이 없는 공유본에서는 아래 범위만 검증합니다. `--csv-only`는 경로 검증 제외를 명시합니다.
 
 ```
-python scripts/check_data.py
-python scripts/check_selected.py
-python scripts/build_seed_sql.py ../BE/src/main/resources/db/migration
+python -B scripts/check_data.py --csv-only
+python -B scripts/check_seed.py
+python -B -m unittest discover -s tests -v
 ```
 
-## 코스 (임시)
+전체 경로 검증·재생성은 [재현 절차](../docs/reproducibility.md)를 따릅니다. 이전의 migration 폴더 직접 생성 명령은 사용하지 않습니다. 코스 ID 대응표는 원래 V3 삽입 순서로 산정했으며 실제 운영 DB 확인을 대체하지 않습니다.
+
+## 코스
 
 - 출발점은 산림청 '시종점' 지점입니다. 코스는 출발점에서 정상까지 가는 최단 경로이고, 폐쇄된 구간은 쓰지 않습니다.
 - `up_min`, `down_min`은 산림청 구간 소요시간을 더한 값입니다.
@@ -83,7 +85,7 @@ python scripts/build_seed_sql.py ../BE/src/main/resources/db/migration
   - 어려움: 오르막 600m 이상 또는 거리 8km 이상
   - 쉬움: 오르막 200m 미만이면서 거리 3km 미만
   - 보통: 나머지
-- 기준값은 아직 조정 중입니다.
+- 21번 작업에서는 이 기준과 고도 결측 분기를 변경하지 않습니다. 현재 420개 코스에는 고도 결측이 없으며 경계값·결측 분기는 자동 테스트로 검증합니다.
 - 산마다 최대 5개만 남깁니다. 정상에서 본 출발 방향이 45° 이상 서로 다른 코스를 고르고, 같은 방향이면 가장 짧은 코스를 남깁니다.
 - 평균 경사가 35%를 넘는 코스는 뺍니다(고도 데이터 오류이거나 걸어서 오르는 길이 아님).
 - OSM 코스: 출발점은 등산로가 도로와 만나는 지점이고, 이름은 가장 가까운 동·리입니다. 험로(sac_scale T4 이상), 잘 안 보이는 길, 비공식 샛길, 통행금지 길, 인도는 쓰지 않습니다. T3(바위 구간)는 `risk`에 '험로'로 표시합니다. 소요시간은 산림청 평균과 같은 1km당 17.5분(오르막)과 12.5분(내리막)입니다.

@@ -18,9 +18,27 @@ API.md     데이터 수집과 날씨에 사용한 외부 API 명세
 | `data/mountain_descriptions.csv` | 산별 1~2문장 소개 |
 | `data/trails.csv` | 선정된 산의 등산로 구간(산림청, OpenStreetMap) |
 | `data/courses.csv` | 출발점 → 정상 코스: 거리, 소요시간, 난이도, 위험 정보 |
-| `scripts/build_trails.py` | 등산로 원본에서 구간과 코스를 생성(`trails.*`, `courses.*`). GeoJSON은 Git에 올리지 않고 이 스크립트로 다시 만듭니다 |
-| `scripts/build_seed_sql.py` | 산 CSV와 `courses.geojson`을 BE 마이그레이션 SQL(V2, V3)로 변환 |
+| `scripts/build_trails.py` | 원본·캐시에서 구간과 코스 후보를 별도 빈 폴더에 생성. 기존 `data/`는 덮어쓰지 않음 |
+| `scripts/build_seed_sql.py` | 산 CSV와 `courses.geojson`을 별도 빈 폴더의 검토용 SQL로 변환. 기존 migration 폴더 출력 금지 |
 | `scripts/check_data.py`, `check_selected.py` | 데이터 정합성 검사 |
+| `scripts/check_seed.py` | CSV와 기존 BE seed의 전체 속성·ID·경로 비교. 실제 DB 연결 없음 |
+| `data/seed_identity.json` | 제공된 기존 V2·V3 기준 산·코스 ID 대응표와 migration SHA-256. 자동 갱신 금지 |
+
+## 21번 작업: 안전한 검증과 재현
+
+원본 GeoJSON이 없어도 아래 검증은 가능합니다. Python 3.11 이상을 사용합니다.
+
+```powershell
+python -B scripts/check_data.py --csv-only
+python -B scripts/check_seed.py
+python -B -m unittest discover -s tests -v
+```
+
+`--csv-only` 통과는 전체 경로 검증 통과가 아닙니다. `python -B scripts/check_data.py`는 GeoJSON 누락 시 누락 파일을 알리고 종료 코드 2를 반환합니다. `check_selected.py`도 산별 외부 검증 입력이 없으면 2로 종료합니다. 오류는 1, 요청한 범위의 검증 통과는 0입니다.
+
+**현재 공유 자료에는 `courses.geojson`, `trails.geojson`, 산림청 원본 및 `data/raw/` 캐시가 없습니다.** GeoJSON은 생성 가능한 중간 산출물이지만, 동일한 원본·캐시가 없으면 기존 420개 코스와 경로의 정확한 재현을 보장할 수 없습니다. CSV에는 경로 좌표가 없고, seed의 경로는 단순화된 값이므로 원본 GeoJSON으로 역변환하지 않습니다.
+
+실제 입력 목록·확보 방법·재생성 명령·보관 방안은 [재현 절차](docs/reproducibility.md)를 따릅니다. 현재 검증 범위와 승인 필요 사항은 DOCS의 `21번_데이터_계약.md`에도 정리돼 있습니다.
 
 컬럼 정의, 코스 생성 규칙, 스크립트 실행 순서는 [`data/README_ko.md`](data/README_ko.md)에 있습니다.
 
@@ -34,7 +52,8 @@ data/*.csv, courses.geojson ── scripts/build_seed_sql.py ──▶ BE V2__mo
 ```
 
 - 산 id는 DB `mountains.id`와 같으며 다시 매기지 않습니다.
-- 코스 id는 DB가 붙이고, 등산기록(`hiking_activities.course_id`)이 참조하므로 바꾸면 안 됩니다. 이미 적용된 V2·V3은 고치지 않고, 데이터 변경은 기존 id를 유지하는 새 마이그레이션으로 반영합니다.
+- 기존 V3의 삽입 순서로 만들어진 코스 ID 1~420을 `seed_identity.json`에 고정했습니다. 새 검토용 SQL에는 이 ID를 명시하므로 입력 행 순서가 달라도 ID가 유지됩니다. 출처·출발점·산·코스명 대응이 달라지면 자동 재배정하지 않고 중단합니다.
+- 등산기록(`hiking_activities.course_id`)이 참조하므로 기존 코스 ID를 바꾸면 안 됩니다. 이미 적용된 V2·V3은 고치지 않고, 승인된 데이터 변경은 기존 ID를 유지하는 새 마이그레이션으로 반영합니다. 생성한 검토용 SQL을 기존 V2·V3 위에 복사하거나 운영 DB에 재적용하지 않습니다.
 
 ## DB 스키마
 
@@ -59,7 +78,7 @@ data/*.csv, courses.geojson ── scripts/build_seed_sql.py ──▶ BE V2__mo
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
-| id | BIGINT PK | DB가 자동으로 붙임. 등산기록이 참조하므로 바꾸지 않습니다 |
+| id | BIGINT PK | 기존 1~420의 대응을 고정. 검토용 SQL은 ID를 명시하고 다음 번호를 421로 설정. 기존 DB에는 적용하지 않음 |
 | mountain_id | BIGINT FK → mountains.id | |
 | source | VARCHAR(10) | `FOREST`(산림청 등산로) / `OSM`(OpenStreetMap) |
 | name | VARCHAR(50) | 코스 이름(예: `도평리 코스 3`). 산 안에서 유일 |
@@ -75,7 +94,7 @@ data/*.csv, courses.geojson ── scripts/build_seed_sql.py ──▶ BE V2__mo
 
 - 산마다 코스는 최대 5개이며, 정상에서 본 출발 방향이 서로 다른 코스로 골랐습니다.
 - 코스가 없는 산 6개: 여기산, 고왕산, 방울산, 심술산, 쌍봉산, 오두산 (화성). 화면에서 "등록된 코스가 없어요" 처리가 필요합니다.
-- 난이도 기준(임시): 어려움 = 오르막 600m 이상 또는 거리 8km 이상, 쉬움 = 오르막 200m 미만이면서 3km 미만, 나머지 보통.
+- 난이도 기준 유지: 어려움 = 오르막 600m 이상 또는 거리 8km 이상, 쉬움 = 오르막 200m 미만이면서 3km 미만, 나머지 보통. 고도 결측 시 거리 3km 미만은 쉬움, 8km 이상은 어려움, 그 사이는 보통이라는 기존 분기도 유지합니다.
 
 ### SQL 예시
 
