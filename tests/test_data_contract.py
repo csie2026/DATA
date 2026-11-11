@@ -205,10 +205,10 @@ class DataContractTests(unittest.TestCase):
                 self.assertEqual({(37.5, 127): None}, build_trails.elevations([(37.5, 127)]))
             self.assertEqual(before, path.read_bytes())
 
-    def test_missing_spot_zip_is_an_error(self):
+    def test_missing_spot_zip_is_skipped(self):
+        # 산림청이 산별 시종점 ZIP을 제공하지 않는 산이 있다. 없으면 건너뛰고 provenance에 기록한다.
         with tempfile.TemporaryDirectory() as folder, patch.object(build_trails, 'P', side_effect=lambda *parts: str(Path(folder).joinpath(*parts))):
-            with self.assertRaises(FileNotFoundError):
-                build_trails.spot_trailheads(['missing'])
+            self.assertEqual([], build_trails.spot_trailheads(['missing']))
 
 
 if __name__ == '__main__':

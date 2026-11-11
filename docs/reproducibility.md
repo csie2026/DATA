@@ -56,7 +56,7 @@ python -B scripts/build_seed_sql.py ../phase21-sql --data-dir ../phase21-input
 
 1. 담당자의 당시 원본·캐시 묶음을 위 경로로 확보하고 SHA-256과 수집일을 기록합니다. 두 GeoJSON이 있으면 위의 직접 검증을 우선합니다.
 2. Python 3.11 이상 환경에서 `python -m pip install -r requirements.txt`로 `pyshp==2.3.1`을 설치합니다. CSV/seed 검사와 단위 테스트는 표준 라이브러리만 사용합니다.
-3. `python -B scripts/build_trails.py ../phase21-generated`를 실행합니다. 기본은 오프라인입니다. 필요한 ZIP·SHP·OSM·고도 캐시가 없거나 코스 420개·기존 ID 대응이 달라지면 중단합니다. 기존 난이도·최단 경로·코스 선정 기준은 유지합니다.
+3. `python -B scripts/build_trails.py ../phase21-generated`를 실행합니다. 기본은 오프라인입니다. 필요한 SHP·OSM·고도 캐시가 없거나 코스 420개·기존 ID 대응이 달라지면 중단합니다. 산별 시종점 ZIP은 산림청이 일부 산(2026-09-27 수집본 기준 45개 코드, 예: 우면산 412900201)에 제공하지 않으므로 없으면 건너뛰고 `provenance.json`의 `missing_trailhead_zips`에 기록합니다. 이 ZIP 없이 생성한 결과가 기존 GeoJSON·CSV와 바이트 동일함을 확인했습니다. 기존 난이도·최단 경로·코스 선정 기준은 유지합니다.
 4. 생성된 폴더에 `mountains.csv`, `mountain_descriptions.csv`, `mountain_names.txt`를 복사해 `check_data.py --data-dir ../phase21-generated`를 실행합니다.
 5. `check_seed.py --data-dir ../phase21-generated`로 기존 속성과 비교합니다. 다르면 후보를 현행 데이터에 적용하지 말고 차이를 검토합니다.
 6. 검증 후 `build_seed_sql.py ../phase21-sql --data-dir ../phase21-generated`로 검토용 SQL을 생성합니다. 출력은 빈 별도 폴더만 허용합니다. 새 코스 SQL은 기존 1~420의 ID를 명시하고 시퀀스 다음 값을 421로 설정합니다.
