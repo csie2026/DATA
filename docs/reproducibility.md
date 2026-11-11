@@ -56,7 +56,7 @@ python -B scripts/build_seed_sql.py ../phase21-sql --data-dir ../phase21-input
 
 1. 담당자의 당시 원본·캐시 묶음을 위 경로로 확보하고 SHA-256과 수집일을 기록합니다. 두 GeoJSON이 있으면 위의 직접 검증을 우선합니다.
 2. Python 3.11 이상 환경에서 `python -m pip install -r requirements.txt`로 `pyshp==2.3.1`을 설치합니다. CSV/seed 검사와 단위 테스트는 표준 라이브러리만 사용합니다.
-3. `python -B scripts/build_trails.py ../phase21-generated`를 실행합니다. 기본은 오프라인입니다. 필요한 SHP·OSM·고도 캐시가 없거나 코스 420개·기존 ID 대응이 달라지면 중단합니다. 산별 시종점 ZIP은 산림청이 일부 산(2026-09-27 수집본 기준 45개 코드, 예: 우면산 412900201)에 제공하지 않으므로 없으면 건너뛰고 `provenance.json`의 `missing_trailhead_zips`에 기록합니다. 이 ZIP 없이 생성한 결과가 기존 GeoJSON·CSV와 바이트 동일함을 확인했습니다. 기존 난이도·최단 경로·코스 선정 기준은 유지합니다.
+3. `python -B scripts/build_trails.py ../phase21-generated`를 실행합니다. 기본은 오프라인입니다. 필요한 SHP·OSM·고도 캐시가 없거나 코스 420개·기존 ID 대응이 달라지면 중단합니다. 산별 시종점 ZIP은 산림청이 일부 산에 제공하지 않으므로(2026-09-27 수집본 기준 `mountains.csv`의 산림청 코드 45개에 ZIP 없음, 예: 우면산 412900201) 없으면 건너뜁니다. 그중 산림청 코스 생성에서 실제로 참조하려던 코드(현재 6개)는 `provenance.json`의 `missing_trailhead_zips`에 기록합니다. OSM으로 코스를 만드는 산은 이 ZIP을 쓰지 않습니다. 이 ZIP 없이 생성한 결과가 기존 GeoJSON·CSV와 바이트 동일함을 확인했습니다. 기존 난이도·최단 경로·코스 선정 기준은 유지합니다.
 4. 생성된 폴더에 `mountains.csv`, `mountain_descriptions.csv`, `mountain_names.txt`를 복사해 `check_data.py --data-dir ../phase21-generated`를 실행합니다.
 5. `check_seed.py --data-dir ../phase21-generated`로 기존 속성과 비교합니다. 다르면 후보를 현행 데이터에 적용하지 말고 차이를 검토합니다.
 6. 검증 후 `build_seed_sql.py ../phase21-sql --data-dir ../phase21-generated`로 검토용 SQL을 생성합니다. 출력은 빈 별도 폴더만 허용합니다. 새 코스 SQL은 기존 1~420의 ID를 명시하고 시퀀스 다음 값을 421로 설정합니다.
@@ -80,9 +80,25 @@ OSM·고도 캐시를 새로 수집해야 한다면 `--allow-network`를 명시�
 
 - [OpenStreetMap 저작권·라이선스](https://www.openstreetmap.org/copyright/en): ODbL, 기여자 표시 및 라이선스 안내를 확인했습니다. 데이터 배포 형태에 따른 의무도 함께 검토해야 합니다.
 - [Open-Meteo 고도 API](https://open-meteo.com/en/docs/elevation-api): Copernicus DEM GLO-90 기반이며 Copernicus와 Open-Meteo 출처 표시를 요구합니다. 서비스 이용 형태에 맞는 조건도 확인해야 합니다.
-- [산림빅데이터거래소 FRT000801](https://www.bigdata-forest.kr/product/FRT000801): 기존 프로젝트 문서는 시선아이티·CC BY로 기록하지만 이번 직접 조회는 타임아웃으로 최신 상품 조건을 확인하지 못했습니다. 당시 내려받은 라이선스 원문을 담당자에게 확보해야 합니다.
-- [산림청 등산로 안내](https://www.forest.go.kr/kfsweb/kfi/kfs/trail/trailInformation.do?mn=NKFS_06_08_02), [공공데이터포털 등산로](https://www.data.go.kr/data/3034022/fileData.do): 원본 확보 후보 경로입니다. 이번 직접 조회 제한으로 현재 산별 ZIP 형식·이용조건을 확정하지 않았습니다. 신규 파일이 기존 EPSG·필드 구조와 맞는지 검토해야 합니다.
-- `check_selected.py`용 도 경계와 OSM 정상 캐시의 정확한 생성 스크립트는 현재 공유본에 없습니다. 기존 원본 묶음·출처·버전을 확보하기 전에는 재현 완료로 표시하지 않습니다.
+- [산림빅데이터거래소 FRT000801](https://www.bigdata-forest.kr/product/FRT000801): 2026-11-11 상품 페이지 내용 기준 판매제공처 시선아이티(SEESUNIT), 라이선스 Creative Commons Attribution(버전 표기 없음), 접근권한 public, "Copyright 2019. SEESUNIT CO., LTD."입니다. 같은 날 사이트는 접속되지 않았으므로 페이지 원문은 캡처 또는 보관본으로 확인합니다. CC BY 조건에 따라 출처(산림청·시선아이티)를 표시합니다.
+- [산림청 등산로 정보](https://www.forest.go.kr/kfsweb/kfi/kfs/trail/trailInformation.do?mn=NKFS_06_08_02): 산별 `_geojson.zip`·SHP의 출처입니다. 다운로드 팝업의 약관은 개인정보 수집·이용 동의이며 데이터 이용조건이 아닙니다. 산림청 [저작권정책](https://www.forest.go.kr/kfsweb/kfi/kfs/cms/cmsView.do?mn=NKFS_07_07&cmsId=FC_000367)상 공공누리 표시 자료는 출처표시(발행연도, 산림청, https://www.forest.go.kr)를 하면 이용할 수 있습니다. 등산로 정보 페이지에는 유형 번호 없는 공공누리 마크만 있고 파일별 공공누리 유형과 상업적 이용·변경 제한 여부는 명시되어 있지 않습니다.
+- [공공데이터포털 산림청 등산로](https://www.data.go.kr/data/3034022/fileData.do): SHP, 이용허락범위 제한 없음, 무료입니다. FRT000801과 같은 상품인지는 명시되어 있지 않습니다.
+- `check_selected.py`용 도 경계와 OSM 정상 캐시의 정확한 생성 스크립트는 현재 공유본에 없습니다. 파일 자체는 아래 수집 기록의 묶음에 있습니다.
+
+## 원본 수집 기록과 보관
+
+원본·캐시는 약 330MB로 Git에 올리지 않기로 했습니다. 대신 수집일과 체크섬을 아래에 남깁니다. 원본은 작업자 PC에만 있으며, 산림청 서버는 이후 변경될 수 있고(2026-11-11 기준 서버 목록에는 로컬 압축본의 `467702701`이 없음) OSM·고도 캐시는 새로 조회하면 결과가 달라질 수 있어 분실하면 같은 결과를 재현할 수 없습니다.
+
+| 입력 | 수집일 | SHA-256 |
+| --- | --- | --- |
+| `mountain.zip` (산별 시종점 ZIP 2,932개) | 2026-09-27 | `e017b599947b4a14493771ed810d0c0221d5e9ab7e9dd5c5b1fc24a69ede0c72` |
+| `FRT000801.zip` (SHP) | 2026-09-27 | `5df7df7f2211935d067a495efe9b342347c6f12f20abceb14785b3388e15041f` |
+| `data/raw/forest_api.json`, `osm_peaks.json`, `provinces_geo.json` | 2026-09-27 | 앞 16자리 `c804277a2358b591`, `9d7f72aa87379455`, `cbe39b5eb92a6f94` |
+| `data/raw/osm_paths/` 57개 | 2026-10-02 | 묶음 `e6d9d8fb35926cd9290b66985d041b142a286488933f1ddd642b5956d689fa11` (파일명 순으로 "파일명, NUL 문자, 개별 SHA-256, 줄바꿈"을 이어 붙인 값의 SHA-256) |
+| `data/raw/elevation_cache.json` | 2026-10-02 | `3b049bc6906ad25e4bdd4a556b74fec4ba3e9f34d7b08f5f07588871f5a4b6ce` |
+| `trails.geojson`, `courses.geojson` | 2026-10-02 | 앞 16자리 `946655d9e9a1032c`, `b1db2b55351c3096` |
+
+위 입력으로 `build_trails.py`를 실행한 결과가 기존 `trails`·`courses`의 GeoJSON·CSV와 바이트 단위로 같음을 확인했습니다(2026-11-11).
 
 ## 운영 DB 검증
 
