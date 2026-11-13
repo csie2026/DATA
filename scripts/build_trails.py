@@ -80,7 +80,7 @@ def spot_trailheads(codes):
     for code in codes:
         zf = P('mountain', 'mountain', f'{code}_geojson.zip')
         if not os.path.exists(zf):
-            raise FileNotFoundError(f'시종점 입력 ZIP이 없습니다: {zf}')
+            continue  # 산림청이 산별 시종점 ZIP을 제공하지 않는 산이 있음. provenance에 missing_trailhead_zips로 기록.
         z = zipfile.ZipFile(zf)
         for n in z.namelist():
             if 'PMNTN_SPOT' in n and 'SAFE' not in n and n.endswith('.json'):
@@ -294,7 +294,8 @@ def main(output_dir, allow_network=False):
     inputs.append(Path(P('data', 'raw', 'elevation_cache.json')))
     provenance = {'python': platform.python_version(), 'pyshp': shapefile.__version__,
                   'network_allowed': allow_network,
-                  'inputs_sha256': {str(p.relative_to(P())): digest(p) for p in sorted(set(inputs))},
+                  'inputs_sha256': {str(p.relative_to(P())): digest(p) for p in sorted(set(inputs)) if p.suffix != '.zip' or p.exists()},
+                  'missing_trailhead_zips': sorted(p.name for p in set(inputs) if p.suffix == '.zip' and not p.exists()),
                   'scripts_sha256': {p.name: digest(p) for p in sorted(Path(P('scripts')).glob('*.py'))},
                   'outputs_sha256': {p.name: digest(p) for p in sorted(out.iterdir())}}
     with (out / 'provenance.json').open('x', encoding='utf-8') as f:
