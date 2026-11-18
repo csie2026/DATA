@@ -4,6 +4,8 @@
 
 ## 파일
 
+`*.geojson`, `raw/`, `archive/`는 `.gitignore`로 제외되어 저장소에는 없고 작업자 PC에만 있습니다. 수집 기록은 [재현 절차](../docs/reproducibility.md)를 참고하세요.
+
 | 파일 | 내용 | 수정 방법 |
 |---|---|---|
 | `mountains.csv` | 산 테이블. 산 하나가 한 행이고, 정상 좌표와 높이가 들어 있습니다. `sigungu_name` 순으로 정렬하고, 같은 시·군 안에서는 `name` 순입니다. | 직접 수정 (엑셀). **기준 원본입니다.** |
@@ -21,7 +23,7 @@
 | `id` | 산 id. DB `mountains.id`와 같은 값이고, `trails.csv`와 `courses.csv`가 `mountain_id`로 참조합니다. **번호를 다시 매기면 안 됩니다. 새 산은 가장 큰 id + 1로 추가합니다.** |
 | `code` / `codes` | 산림청 산 코드 / 같은 산으로 합쳐진 코드 전체. 데이터 파이프라인에서만 씁니다. 산림청 등산로 파일과 연결할 수 있는 유일한 키이고, 산 이름은 같은 이름이 많아서 키로 쓸 수 없습니다. DB에는 넣지 않습니다. |
 | `name`, `sigungu_name`, `address` | 산 이름, 시·군, 주소 |
-| `height`, `height_src` | 높이(m)와 그 출처: `forest_api`, `osm`, `manual` |
+| `height`, `height_src` | 높이(m)와 그 출처: `forest_api`, `osm`, `manual`. 출처가 빈 산이 8개 있음(노적봉, 문수산 (김포), 백봉산, 인릉산, 불곡산 (양주), 고왕산, 문수산 (용인), 도드람산) |
 | `summit_lat`, `summit_lon`, `summit_src` | 정상 좌표와 그 출처. `summit_src`가 `osm`이면 좌표는 ODbL 라이선스입니다. |
 
 - 등산로 통계는 `trails.csv`에 있습니다. 날씨 격자 좌표와 표준 시군구 코드는 `build_seed_sql.py`가 SQL을 만들 때 계산해서 넣습니다.
@@ -62,7 +64,10 @@
 | `check_selected.py` | `mountains.csv`의 산별 검사입니다(OSM 정상, 도 경계, 높이 등). 남아 있는 경고는 모두 확인하고 넘어간 항목입니다(경계에 걸친 산, 100m 미만 산, 코드 없는 산 등). |
 | `build_seed_sql.py <별도 빈 출력 폴더>` | 산 CSV와 `courses.geojson`을 검토용 V2·V3 SQL로 변환합니다. 기존 migration 폴더 출력은 금지하며 코스 ID는 `seed_identity.json`을 따릅니다. 권역·시군·높이 반올림·기상청 격자·경로 2m 단순화는 유지합니다. |
 | `build_trails.py <별도 빈 출력 폴더>` | `trails.*`와 `courses.*` 후보를 생성합니다. `FRT000801`, `mountain/mountain`, OSM·고도 캐시가 필요합니다. 기본은 오프라인이며 기존 DATA를 덮어쓰지 않습니다. |
+| `data_contract.py` | CSV·seed 식별자·경로 검증 공용 도구(`check_*`와 테스트가 사용). |
+| `osm_trails.py` | OSM 등산로·코스 생성. `build_trails.py`가 호출하며 Overpass 응답은 `raw/osm_paths/`에 캐시합니다. |
 | `geo.py` | 공용 경로와 좌표 변환(EPSG 5179/5186). `python geo.py`를 실행하면 자체 검사를 합니다. |
+| `requirements.txt` | 재생성용 `pyshp==2.3.1`(루트). |
 | `fetch_forest_api.py` | `raw/forest_api.json`을 다시 내려받습니다. `../.env`에 `DATA_GO_KR_KEY`가 있어야 합니다. |
 | `archive/` | 예전 파이프라인 스크립트(`build_mountains.py`, `build_selected.py`, `suggest_summits.py`). **실행 금지.** `build_selected.py`를 실행하면 엑셀로 고친 `mountains.csv`를 덮어씁니다. 입력 파일도 `data/archive/`로 옮겨져 있어서 그대로는 동작하지 않습니다. |
 
