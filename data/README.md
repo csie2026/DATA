@@ -4,6 +4,8 @@ The team's mountain list: 140 mountains, covering all 31 시·군 of 경기도. 
 
 ## Files
 
+`*.geojson`, `raw/` and `archive/` are in `.gitignore`: they are not in the repo and exist only on the maintainer's PC. See `../docs/reproducibility.md` for collection dates and checksums.
+
 | File | What | Edit by |
 |---|---|---|
 | `mountains.csv` | Mountain table: one row per mountain, with summit coordinates and height. Sorted by `sigungu_name`, then `name`. | Hand (Excel). This is the source of truth. |
@@ -18,7 +20,7 @@ The team's mountain list: 140 mountains, covering all 31 시·군 of 경기도. 
 - `id`: the mountain id. It equals DB `mountains.id`, and `trails.csv` / `courses.csv` reference it as `mountain_id`. **Never renumber; a new mountain gets max id + 1.**
 - `code` / `codes`: 산림청 mountain code / all merged codes. Only the data pipeline uses them (they are the only key into the 산림청 trail files; names are ambiguous), and they are not in the DB.
 - `name`, `sigungu_name`, `address`
-- `height` and `height_src`, where it came from: `forest_api`, `osm` or `manual`
+- `height` and `height_src`, where it came from: `forest_api`, `osm` or `manual`. Eight mountains have an empty `height_src` (ids 4, 28, 33, 52, 70, 89, 94, 108)
 - `summit_lat`, `summit_lon` and `summit_src`. When `summit_src` is `osm`, the coordinates are ODbL.
 
 Trail statistics live in `trails.csv`. The weather grid and the official 시군구 code are added by `build_seed_sql.py`.
@@ -33,6 +35,7 @@ Names keep their parentheses, e.g. `검단산 (성남/광주)`: the parentheses 
 | `check_selected.py` | Sanity checks for `mountains.csv`. The remaining flags have been reviewed and accepted (border mountains, hills under 100 m, rows with no code, and so on). |
 | `build_seed_sql.py <empty review output dir>` | Creates review-only V2/V3 candidates in an empty directory. Existing migration directories are rejected. Course IDs follow `seed_identity.json`. Region/city mapping and path simplification remain unchanged. |
 | `build_trails.py` | Builds `trails.*` and `courses.*` (`trails.id` = plain integers 1..N, renumbered on every rebuild; courses have no id (the DB assigns it); `mountain_id` → `mountains.id`; `courses.segment_ids` → `trails.id`; `trails.source` = forest/osm, `source_id` = 산림청 `MNTN_CODE-PMNTN_SN` (not unique) or OSM `way/<id>`; `courses.source` = forest/osm). Needs `../FRT000801` and `../mountain`. |
+| `data_contract.py` | Shared CSV / seed-identity / path checks used by the `check_*` scripts and tests. |
 | `geo.py` | Shared paths and TM projections (EPSG 5179/5186); `python geo.py` runs the self-check. |
 | `fetch_forest_api.py` | Re-downloads `raw/forest_api.json`. Needs `DATA_GO_KR_KEY` in `../.env`. |
 | `archive/` | Old pipeline scripts (`build_mountains.py`, `build_selected.py`, `suggest_summits.py`). **Do not run them.** `build_selected.py` would overwrite the hand edits in `mountains.csv`, and the input paths have moved to `data/archive/`. |
